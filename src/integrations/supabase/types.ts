@@ -9,7 +9,39 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      stream_failures: {
+        Row: {
+          created_at: string
+          created_date: string
+          end_date: string | null
+          failure_payload: Json
+          failure_status: string
+          id: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_date?: string
+          end_date?: string | null
+          failure_payload?: Json
+          failure_status: string
+          id?: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_date?: string
+          end_date?: string | null
+          failure_payload?: Json
+          failure_status?: string
+          id?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

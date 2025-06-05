@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Eye, Filter, X, Plus } from 'lucide-react';
 import { StreamFailureEntity, FilterState, OrderByClause } from '@/types/streamFailure';
-import { generateMockFailures } from '@/utils/mockData';
+import { supabase } from '@/integrations/supabase/client';
 import { FiltersSidebar } from './FiltersSidebar';
 import { PayloadModal } from './PayloadModal';
 import { CreateFailureForm } from './CreateFailureForm';
@@ -25,7 +24,7 @@ export const StreamFailureViewer: React.FC = () => {
     endDateRange: {}
   });
   const [orderBy, setOrderBy] = useState<OrderByClause[]>([
-    { field: 'createdDate', direction: 'desc' }
+    { field: 'created_date', direction: 'desc' }
   ]);
   const [selectedPayload, setSelectedPayload] = useState<StreamFailureEntity | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -34,60 +33,74 @@ export const StreamFailureViewer: React.FC = () => {
   const loadFailures = useCallback(async (reset: boolean = false) => {
     setLoading(true);
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const page = reset ? 0 : currentPage;
-    const newFailures = generateMockFailures(PAGE_SIZE, page * PAGE_SIZE);
-    
-    // Apply filters (simplified for demo)
-    let filteredFailures = newFailures;
-    
-    if (filters.id) {
-      filteredFailures = filteredFailures.filter(f => 
-        f.id.toLowerCase().includes(filters.id!.toLowerCase())
-      );
-    }
-    
-    if (filters.orgIds.length > 0) {
-      filteredFailures = filteredFailures.filter(f => 
-        filters.orgIds.includes(f.orgId)
-      );
-    }
-    
-    if (filters.failureStatuses.length > 0) {
-      filteredFailures = filteredFailures.filter(f => 
-        filters.failureStatuses.includes(f.failureStatus)
-      );
-    }
+    try {
+      let query = supabase
+        .from('stream_failures')
+        .select('*');
 
-    // Apply sorting
-    if (orderBy.length > 0) {
-      const sortClause = orderBy[0];
-      filteredFailures.sort((a, b) => {
-        let aVal: any = a[sortClause.field as keyof StreamFailureEntity];
-        let bVal: any = b[sortClause.field as keyof StreamFailureEntity];
-        
-        if (sortClause.field.includes('Date')) {
-          aVal = new Date(aVal as string).getTime();
-          bVal = new Date(bVal as string).getTime();
-        }
-        
-        const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-        return sortClause.direction === 'desc' ? -comparison : comparison;
-      });
-    }
+      // Apply filters
+      if (filters.id) {
+        query = query.ilike('id', `%${filters.id}%`);
+      }
+      
+      if (filters.orgIds.length > 0) {
+        query = query.in('org_id', filters.orgIds);
+      }
+      
+      if (filters.failureStatuses.length > 0) {
+        query = query.in('failure_status', filters.failureStatuses);
+      }
 
-    if (reset) {
-      setFailures(filteredFailures);
-      setCurrentPage(1);
-    } else {
-      setFailures(prev => [...prev, ...filteredFailures]);
-      setCurrentPage(prev => prev + 1);
+      if (filters.createdDateRange.start) {
+        query = query.gte('created_date', filters.createdDateRange.start.toISOString());
+      }
+      
+      if (filters.createdDateRange.end) {
+        query = query.lte('created_date', filters.createdDateRange.end.toISOString());
+      }
+
+      if (filters.endDateRange.start) {
+        query = query.gte('end_date', filters.endDateRange.start.toISOString());
+      }
+      
+      if (filters.endDateRange.end) {
+        query = query.lte('end_date', filters.endDateRange.end.toISOString());
+      }
+
+      // Apply sorting
+      if (orderBy.length > 0) {
+        const sortClause = orderBy[0];
+        query = query.order(sortClause.field, { ascending: sortClause.direction === 'asc' });
+      }
+
+      // Apply pagination
+      const from = reset ? 0 : currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error loading failures:', error);
+        return;
+      }
+
+      const newFailures = data || [];
+
+      if (reset) {
+        setFailures(newFailures);
+        setCurrentPage(1);
+      } else {
+        setFailures(prev => [...prev, ...newFailures]);
+        setCurrentPage(prev => prev + 1);
+      }
+      
+      setHasMore(newFailures.length === PAGE_SIZE);
+    } catch (error) {
+      console.error('Error loading failures:', error);
+    } finally {
+      setLoading(false);
     }
-    
-    setHasMore(filteredFailures.length === PAGE_SIZE);
-    setLoading(false);
   }, [currentPage, filters, orderBy]);
 
   useEffect(() => {
@@ -107,9 +120,32 @@ export const StreamFailureViewer: React.FC = () => {
     });
   };
 
-  const handleCreateFailure = (newFailure: StreamFailureEntity) => {
-    setFailures(prev => [newFailure, ...prev]);
-    setShowCreateForm(false);
+  const handleCreateFailure = async (newFailure: Omit<StreamFailureEntity, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('stream_failures')
+        .insert([{
+          org_id: newFailure.org_id,
+          failure_status: newFailure.failure_status,
+          created_date: newFailure.created_date,
+          end_date: newFailure.end_date,
+          failure_payload: newFailure.failure_payload
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating failure:', error);
+        return;
+      }
+
+      if (data) {
+        setFailures(prev => [data, ...prev]);
+      }
+      setShowCreateForm(false);
+    } catch (error) {
+      console.error('Error creating failure:', error);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -253,34 +289,34 @@ export const StreamFailureViewer: React.FC = () => {
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('failureStatus')}
+                    onClick={() => handleSort('failure_status')}
                   >
                     Status
-                    {orderBy.find(o => o.field === 'failureStatus') && (
+                    {orderBy.find(o => o.field === 'failure_status') && (
                       <span className="ml-1">
-                        {orderBy.find(o => o.field === 'failureStatus')?.direction === 'asc' ? '↑' : '↓'}
+                        {orderBy.find(o => o.field === 'failure_status')?.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('createdDate')}
+                    onClick={() => handleSort('created_date')}
                   >
                     Created Date
-                    {orderBy.find(o => o.field === 'createdDate') && (
+                    {orderBy.find(o => o.field === 'created_date') && (
                       <span className="ml-1">
-                        {orderBy.find(o => o.field === 'createdDate')?.direction === 'asc' ? '↑' : '↓'}
+                        {orderBy.find(o => o.field === 'created_date')?.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('endDate')}
+                    onClick={() => handleSort('end_date')}
                   >
                     End Date
-                    {orderBy.find(o => o.field === 'endDate') && (
+                    {orderBy.find(o => o.field === 'end_date') && (
                       <span className="ml-1">
-                        {orderBy.find(o => o.field === 'endDate')?.direction === 'asc' ? '↑' : '↓'}
+                        {orderBy.find(o => o.field === 'end_date')?.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
                   </th>
@@ -296,18 +332,18 @@ export const StreamFailureViewer: React.FC = () => {
                       {failure.id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {failure.orgId}
+                      {failure.org_id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge className={getStatusColor(failure.failureStatus)}>
-                        {failure.failureStatus}
+                      <Badge className={getStatusColor(failure.failure_status)}>
+                        {failure.failure_status}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {format(new Date(failure.createdDate), 'MMM dd, yyyy HH:mm')}
+                      {format(new Date(failure.created_date), 'MMM dd, yyyy HH:mm')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {failure.endDate ? format(new Date(failure.endDate), 'MMM dd, yyyy HH:mm') : '-'}
+                      {failure.end_date ? format(new Date(failure.end_date), 'MMM dd, yyyy HH:mm') : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <Button

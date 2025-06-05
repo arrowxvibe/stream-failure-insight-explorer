@@ -84,8 +84,8 @@ export const PayloadModal: React.FC<PayloadModalProps> = ({ failure, onClose }) 
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-3">
               Failure Details: {failure.id}
-              <Badge className={getStatusColor(failure.failureStatus)}>
-                {failure.failureStatus}
+              <Badge className={getStatusColor(failure.failure_status)}>
+                {failure.failure_status}
               </Badge>
             </DialogTitle>
             <Button variant="ghost" size="sm" onClick={onClose}>
@@ -98,22 +98,22 @@ export const PayloadModal: React.FC<PayloadModalProps> = ({ failure, onClose }) 
           <div className="space-y-2">
             <div>
               <span className="text-sm font-medium text-gray-600">Organization ID:</span>
-              <p className="text-sm">{failure.orgId}</p>
+              <p className="text-sm">{failure.org_id}</p>
             </div>
             <div>
               <span className="text-sm font-medium text-gray-600">Created Date:</span>
-              <p className="text-sm">{format(new Date(failure.createdDate), 'PPP pp')}</p>
+              <p className="text-sm">{format(new Date(failure.created_date), 'PPP pp')}</p>
             </div>
           </div>
           <div className="space-y-2">
             <div>
               <span className="text-sm font-medium text-gray-600">Status:</span>
-              <p className="text-sm">{failure.failureStatus}</p>
+              <p className="text-sm">{failure.failure_status}</p>
             </div>
             <div>
               <span className="text-sm font-medium text-gray-600">End Date:</span>
               <p className="text-sm">
-                {failure.endDate ? format(new Date(failure.endDate), 'PPP pp') : 'Not completed'}
+                {failure.end_date ? format(new Date(failure.end_date), 'PPP pp') : 'Not completed'}
               </p>
             </div>
           </div>
@@ -125,7 +125,7 @@ export const PayloadModal: React.FC<PayloadModalProps> = ({ failure, onClose }) 
             <Button
               variant="outline"
               size="sm"
-              onClick={() => copyToClipboard(JSON.stringify(failure.failurePayload, null, 2))}
+              onClick={() => copyToClipboard(JSON.stringify(failure.failure_payload, null, 2))}
             >
               <Copy className="h-4 w-4 mr-2" />
               Copy JSON
@@ -134,7 +134,7 @@ export const PayloadModal: React.FC<PayloadModalProps> = ({ failure, onClose }) 
 
           <ScrollArea className="h-96 w-full border rounded-lg p-4">
             <div className="font-mono text-sm">
-              {renderJsonValue(failure.failurePayload)}
+              {renderJsonValue(failure.failure_payload)}
             </div>
           </ScrollArea>
         </div>

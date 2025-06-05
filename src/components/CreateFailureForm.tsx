@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,11 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StreamFailureEntity } from '@/types/streamFailure';
-import { getAllOrgIds, getAllStatuses } from '@/utils/mockData';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CreateFailureFormProps {
   onClose: () => void;
-  onSubmit: (failure: StreamFailureEntity) => void;
+  onSubmit: (failure: Omit<StreamFailureEntity, 'id' | 'created_at' | 'updated_at'>) => void;
 }
 
 export const CreateFailureForm: React.FC<CreateFailureFormProps> = ({ onClose, onSubmit }) => {
@@ -21,6 +21,36 @@ export const CreateFailureForm: React.FC<CreateFailureFormProps> = ({ onClose, o
     failurePayload: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orgIds, setOrgIds] = useState<string[]>([]);
+  const [statuses, setStatuses] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadOptions = async () => {
+      try {
+        // Get unique org IDs
+        const { data: orgData } = await supabase
+          .from('stream_failures')
+          .select('org_id')
+          .order('org_id');
+        
+        const uniqueOrgIds = [...new Set(orgData?.map(item => item.org_id) || [])];
+        setOrgIds(uniqueOrgIds);
+
+        // Get unique statuses
+        const { data: statusData } = await supabase
+          .from('stream_failures')
+          .select('failure_status')
+          .order('failure_status');
+        
+        const uniqueStatuses = [...new Set(statusData?.map(item => item.failure_status) || [])];
+        setStatuses(uniqueStatuses);
+      } catch (error) {
+        console.error('Error loading options:', error);
+      }
+    };
+
+    loadOptions();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,13 +65,12 @@ export const CreateFailureForm: React.FC<CreateFailureFormProps> = ({ onClose, o
         payload = { message: formData.failurePayload };
       }
 
-      const newFailure: StreamFailureEntity = {
-        id: `failure-${Date.now()}`,
-        orgId: formData.orgId,
-        failureStatus: formData.failureStatus,
-        createdDate: new Date().toISOString(),
-        endDate: null,
-        failurePayload: payload
+      const newFailure = {
+        org_id: formData.orgId,
+        failure_status: formData.failureStatus,
+        created_date: new Date().toISOString(),
+        end_date: null,
+        failure_payload: payload
       };
 
       onSubmit(newFailure);
@@ -51,9 +80,6 @@ export const CreateFailureForm: React.FC<CreateFailureFormProps> = ({ onClose, o
       setIsSubmitting(false);
     }
   };
-
-  const orgIds = getAllOrgIds();
-  const statuses = getAllStatuses();
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -80,8 +106,15 @@ export const CreateFailureForm: React.FC<CreateFailureFormProps> = ({ onClose, o
                       {orgId}
                     </SelectItem>
                   ))}
+                  <SelectItem value="new-org">Add New Organization</SelectItem>
                 </SelectContent>
               </Select>
+              {formData.orgId === 'new-org' && (
+                <Input
+                  placeholder="Enter new organization ID"
+                  onChange={(e) => setFormData(prev => ({ ...prev, orgId: e.target.value }))}
+                />
+              )}
             </div>
 
             <div className="space-y-2">
@@ -100,6 +133,11 @@ export const CreateFailureForm: React.FC<CreateFailureFormProps> = ({ onClose, o
                       {status}
                     </SelectItem>
                   ))}
+                  <SelectItem value="PENDING">PENDING</SelectItem>
+                  <SelectItem value="PROCESSING">PROCESSING</SelectItem>
+                  <SelectItem value="FAILED">FAILED</SelectItem>
+                  <SelectItem value="RESOLVED">RESOLVED</SelectItem>
+                  <SelectItem value="ESCALATED">ESCALATED</SelectItem>
                 </SelectContent>
               </Select>
             </div>

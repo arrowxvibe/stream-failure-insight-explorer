@@ -1,11 +1,13 @@
 
 export interface StreamFailureEntity {
   id: string;
-  orgId: string;
-  failureStatus: string;
-  createdDate: string;
-  endDate: string | null;
-  failurePayload: Record<string, any>;
+  org_id: string;
+  failure_status: string;
+  created_date: string;
+  end_date: string | null;
+  failure_payload: Record<string, any>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FirestoreFilter {
