@@ -1,4 +1,6 @@
 
+import { Json } from '@/integrations/supabase/types';
+
 export interface StreamFailureEntity {
   id: string;
   org_id: string;
@@ -34,3 +36,19 @@ export interface FilterState {
     end?: Date;
   };
 }
+
+// Helper function to convert Supabase row to StreamFailureEntity
+export const convertSupabaseRowToEntity = (row: any): StreamFailureEntity => {
+  return {
+    id: row.id,
+    org_id: row.org_id,
+    failure_status: row.failure_status,
+    created_date: row.created_date,
+    end_date: row.end_date,
+    failure_payload: typeof row.failure_payload === 'object' && row.failure_payload !== null 
+      ? row.failure_payload as Record<string, any>
+      : {},
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+};

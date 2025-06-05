@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Eye, Filter, X, Plus } from 'lucide-react';
-import { StreamFailureEntity, FilterState, OrderByClause } from '@/types/streamFailure';
+import { StreamFailureEntity, FilterState, OrderByClause, convertSupabaseRowToEntity } from '@/types/streamFailure';
 import { supabase } from '@/integrations/supabase/client';
 import { FiltersSidebar } from './FiltersSidebar';
 import { PayloadModal } from './PayloadModal';
@@ -85,7 +85,7 @@ export const StreamFailureViewer: React.FC = () => {
         return;
       }
 
-      const newFailures = data || [];
+      const newFailures = (data || []).map(convertSupabaseRowToEntity);
 
       if (reset) {
         setFailures(newFailures);
@@ -140,7 +140,8 @@ export const StreamFailureViewer: React.FC = () => {
       }
 
       if (data) {
-        setFailures(prev => [data, ...prev]);
+        const convertedData = convertSupabaseRowToEntity(data);
+        setFailures(prev => [convertedData, ...prev]);
       }
       setShowCreateForm(false);
     } catch (error) {
