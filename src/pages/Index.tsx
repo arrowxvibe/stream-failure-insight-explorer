@@ -1,11 +1,15 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import { StreamFailureViewer } from "@/components/StreamFailureViewer";
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto py-8">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Stream Failure Viewer</h1>
+          <p className="text-gray-600">Monitor and analyze IoT stream failures with advanced filtering and sorting capabilities</p>
+        </div>
+        <StreamFailureViewer />
       </div>
     </div>
   );
