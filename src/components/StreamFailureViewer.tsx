@@ -3,11 +3,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Eye, Filter, X } from 'lucide-react';
+import { Loader2, Eye, Filter, X, Plus } from 'lucide-react';
 import { StreamFailureEntity, FilterState, OrderByClause } from '@/types/streamFailure';
 import { generateMockFailures } from '@/utils/mockData';
 import { FiltersSidebar } from './FiltersSidebar';
 import { PayloadModal } from './PayloadModal';
+import { CreateFailureForm } from './CreateFailureForm';
 import { format } from 'date-fns';
 
 const PAGE_SIZE = 200;
@@ -28,6 +29,7 @@ export const StreamFailureViewer: React.FC = () => {
   ]);
   const [selectedPayload, setSelectedPayload] = useState<StreamFailureEntity | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const loadFailures = useCallback(async (reset: boolean = false) => {
     setLoading(true);
@@ -63,8 +65,8 @@ export const StreamFailureViewer: React.FC = () => {
     if (orderBy.length > 0) {
       const sortClause = orderBy[0];
       filteredFailures.sort((a, b) => {
-        let aVal = a[sortClause.field as keyof StreamFailureEntity];
-        let bVal = b[sortClause.field as keyof StreamFailureEntity];
+        let aVal: any = a[sortClause.field as keyof StreamFailureEntity];
+        let bVal: any = b[sortClause.field as keyof StreamFailureEntity];
         
         if (sortClause.field.includes('Date')) {
           aVal = new Date(aVal as string).getTime();
@@ -103,6 +105,11 @@ export const StreamFailureViewer: React.FC = () => {
       }
       return [{ field, direction: 'asc' }];
     });
+  };
+
+  const handleCreateFailure = (newFailure: StreamFailureEntity) => {
+    setFailures(prev => [newFailure, ...prev]);
+    setShowCreateForm(false);
   };
 
   const getStatusColor = (status: string) => {
@@ -171,8 +178,17 @@ export const StreamFailureViewer: React.FC = () => {
             )}
           </div>
 
-          <div className="text-sm text-gray-600">
-            {failures.length} records loaded
+          <div className="flex items-center gap-4">
+            <Button
+              onClick={() => setShowCreateForm(true)}
+              size="sm"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Failure
+            </Button>
+            <div className="text-sm text-gray-600">
+              {failures.length} records loaded
+            </div>
           </div>
         </div>
 
@@ -336,6 +352,14 @@ export const StreamFailureViewer: React.FC = () => {
         <PayloadModal
           failure={selectedPayload}
           onClose={() => setSelectedPayload(null)}
+        />
+      )}
+
+      {/* Create Form Modal */}
+      {showCreateForm && (
+        <CreateFailureForm
+          onClose={() => setShowCreateForm(false)}
+          onSubmit={handleCreateFailure}
         />
       )}
     </div>
