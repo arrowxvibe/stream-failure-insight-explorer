@@ -1,13 +1,13 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Eye, Filter, X, Plus } from 'lucide-react';
-import { StreamFailureEntity, FilterState, OrderByClause, convertSupabaseRowToEntity } from '@/types/streamFailure';
-import { supabase } from '@/integrations/supabase/client';
+import { Loader2, Eye, Filter, X } from 'lucide-react';
+import { StreamFailureEntity, FilterState, OrderByClause } from '@/types/streamFailure';
+import { generateMockFailures } from '@/utils/mockData';
 import { FiltersSidebar } from './FiltersSidebar';
 import { PayloadModal } from './PayloadModal';
-import { CreateFailureForm } from './CreateFailureForm';
 import { format } from 'date-fns';
 
 const PAGE_SIZE = 200;
@@ -24,83 +24,68 @@ export const StreamFailureViewer: React.FC = () => {
     endDateRange: {}
   });
   const [orderBy, setOrderBy] = useState<OrderByClause[]>([
-    { field: 'created_date', direction: 'desc' }
+    { field: 'createdDate', direction: 'desc' }
   ]);
   const [selectedPayload, setSelectedPayload] = useState<StreamFailureEntity | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const loadFailures = useCallback(async (reset: boolean = false) => {
     setLoading(true);
     
-    try {
-      let query = supabase
-        .from('stream_failures')
-        .select('*');
-
-      // Apply filters
-      if (filters.id) {
-        query = query.ilike('id', `%${filters.id}%`);
-      }
-      
-      if (filters.orgIds.length > 0) {
-        query = query.in('org_id', filters.orgIds);
-      }
-      
-      if (filters.failureStatuses.length > 0) {
-        query = query.in('failure_status', filters.failureStatuses);
-      }
-
-      if (filters.createdDateRange.start) {
-        query = query.gte('created_date', filters.createdDateRange.start.toISOString());
-      }
-      
-      if (filters.createdDateRange.end) {
-        query = query.lte('created_date', filters.createdDateRange.end.toISOString());
-      }
-
-      if (filters.endDateRange.start) {
-        query = query.gte('end_date', filters.endDateRange.start.toISOString());
-      }
-      
-      if (filters.endDateRange.end) {
-        query = query.lte('end_date', filters.endDateRange.end.toISOString());
-      }
-
-      // Apply sorting
-      if (orderBy.length > 0) {
-        const sortClause = orderBy[0];
-        query = query.order(sortClause.field, { ascending: sortClause.direction === 'asc' });
-      }
-
-      // Apply pagination
-      const from = reset ? 0 : currentPage * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      query = query.range(from, to);
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error loading failures:', error);
-        return;
-      }
-
-      const newFailures = (data || []).map(convertSupabaseRowToEntity);
-
-      if (reset) {
-        setFailures(newFailures);
-        setCurrentPage(1);
-      } else {
-        setFailures(prev => [...prev, ...newFailures]);
-        setCurrentPage(prev => prev + 1);
-      }
-      
-      setHasMore(newFailures.length === PAGE_SIZE);
-    } catch (error) {
-      console.error('Error loading failures:', error);
-    } finally {
-      setLoading(false);
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const page = reset ? 0 : currentPage;
+    const newFailures = generateMockFailures(PAGE_SIZE, page * PAGE_SIZE);
+    
+    // Apply filters (simplified for demo)
+    let filteredFailures = newFailures;
+    
+    if (filters.id) {
+      filteredFailures = filteredFailures.filter(f => 
+        f.id.toLowerCase().includes(filters.id!.toLowerCase())
+      );
     }
+    
+    if (filters.orgIds.length > 0) {
+      filteredFailures = filteredFailures.filter(f => 
+        filters.orgIds.includes(f.orgId)
+      );
+    }
+    
+    if (filters.failureStatuses.length > 0) {
+      filteredFailures = filteredFailures.filter(f => 
+        filters.failureStatuses.includes(f.failureStatus)
+      );
+    }
+
+    // Apply sorting
+    if (orderBy.length > 0) {
+      const sortClause = orderBy[0];
+      filteredFailures.sort((a, b) => {
+        let aVal = a[sortClause.field as keyof StreamFailureEntity];
+        let bVal = b[sortClause.field as keyof StreamFailureEntity];
+        
+        if (sortClause.field.includes('Date')) {
+          aVal = new Date(aVal as string).getTime();
+          bVal = new Date(bVal as string).getTime();
+        }
+        
+        const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return sortClause.direction === 'desc' ? -comparison : comparison;
+      });
+    }
+
+    if (reset) {
+      setFailures(filteredFailures);
+      setCurrentPage(1);
+    } else {
+      setFailures(prev => [...prev, ...filteredFailures]);
+      setCurrentPage(prev => prev + 1);
+    }
+    
+    setHasMore(filteredFailures.length === PAGE_SIZE);
+    setLoading(false);
   }, [currentPage, filters, orderBy]);
 
   useEffect(() => {
@@ -118,35 +103,6 @@ export const StreamFailureViewer: React.FC = () => {
       }
       return [{ field, direction: 'asc' }];
     });
-  };
-
-  const handleCreateFailure = async (newFailure: Omit<StreamFailureEntity, 'id' | 'created_at' | 'updated_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('stream_failures')
-        .insert([{
-          org_id: newFailure.org_id,
-          failure_status: newFailure.failure_status,
-          created_date: newFailure.created_date,
-          end_date: newFailure.end_date,
-          failure_payload: newFailure.failure_payload
-        }])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating failure:', error);
-        return;
-      }
-
-      if (data) {
-        const convertedData = convertSupabaseRowToEntity(data);
-        setFailures(prev => [convertedData, ...prev]);
-      }
-      setShowCreateForm(false);
-    } catch (error) {
-      console.error('Error creating failure:', error);
-    }
   };
 
   const getStatusColor = (status: string) => {
@@ -215,17 +171,8 @@ export const StreamFailureViewer: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-4">
-            <Button
-              onClick={() => setShowCreateForm(true)}
-              size="sm"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Failure
-            </Button>
-            <div className="text-sm text-gray-600">
-              {failures.length} records loaded
-            </div>
+          <div className="text-sm text-gray-600">
+            {failures.length} records loaded
           </div>
         </div>
 
@@ -290,34 +237,34 @@ export const StreamFailureViewer: React.FC = () => {
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('failure_status')}
+                    onClick={() => handleSort('failureStatus')}
                   >
                     Status
-                    {orderBy.find(o => o.field === 'failure_status') && (
+                    {orderBy.find(o => o.field === 'failureStatus') && (
                       <span className="ml-1">
-                        {orderBy.find(o => o.field === 'failure_status')?.direction === 'asc' ? '↑' : '↓'}
+                        {orderBy.find(o => o.field === 'failureStatus')?.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('created_date')}
+                    onClick={() => handleSort('createdDate')}
                   >
                     Created Date
-                    {orderBy.find(o => o.field === 'created_date') && (
+                    {orderBy.find(o => o.field === 'createdDate') && (
                       <span className="ml-1">
-                        {orderBy.find(o => o.field === 'created_date')?.direction === 'asc' ? '↑' : '↓'}
+                        {orderBy.find(o => o.field === 'createdDate')?.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('end_date')}
+                    onClick={() => handleSort('endDate')}
                   >
                     End Date
-                    {orderBy.find(o => o.field === 'end_date') && (
+                    {orderBy.find(o => o.field === 'endDate') && (
                       <span className="ml-1">
-                        {orderBy.find(o => o.field === 'end_date')?.direction === 'asc' ? '↑' : '↓'}
+                        {orderBy.find(o => o.field === 'endDate')?.direction === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
                   </th>
@@ -333,18 +280,18 @@ export const StreamFailureViewer: React.FC = () => {
                       {failure.id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {failure.org_id}
+                      {failure.orgId}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge className={getStatusColor(failure.failure_status)}>
-                        {failure.failure_status}
+                      <Badge className={getStatusColor(failure.failureStatus)}>
+                        {failure.failureStatus}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {format(new Date(failure.created_date), 'MMM dd, yyyy HH:mm')}
+                      {format(new Date(failure.createdDate), 'MMM dd, yyyy HH:mm')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {failure.end_date ? format(new Date(failure.end_date), 'MMM dd, yyyy HH:mm') : '-'}
+                      {failure.endDate ? format(new Date(failure.endDate), 'MMM dd, yyyy HH:mm') : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <Button
@@ -389,14 +336,6 @@ export const StreamFailureViewer: React.FC = () => {
         <PayloadModal
           failure={selectedPayload}
           onClose={() => setSelectedPayload(null)}
-        />
-      )}
-
-      {/* Create Form Modal */}
-      {showCreateForm && (
-        <CreateFailureForm
-          onClose={() => setShowCreateForm(false)}
-          onSubmit={handleCreateFailure}
         />
       )}
     </div>

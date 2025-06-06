@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { CalendarIcon, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { FilterState } from '@/types/streamFailure';
-import { supabase } from '@/integrations/supabase/client';
+import { getAllOrgIds, getAllStatuses } from '@/utils/mockData';
 
 interface FiltersSidebarProps {
   filters: FilterState;
@@ -22,39 +22,8 @@ export const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
   filters,
   onFiltersChange
 }) => {
-  const [orgIds, setOrgIds] = useState<string[]>([]);
-  const [statuses, setStatuses] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadFilterOptions = async () => {
-      try {
-        // Get unique org IDs
-        const { data: orgData } = await supabase
-          .from('stream_failures')
-          .select('org_id')
-          .order('org_id');
-        
-        const uniqueOrgIds = [...new Set(orgData?.map(item => item.org_id) || [])];
-        setOrgIds(uniqueOrgIds);
-
-        // Get unique statuses
-        const { data: statusData } = await supabase
-          .from('stream_failures')
-          .select('failure_status')
-          .order('failure_status');
-        
-        const uniqueStatuses = [...new Set(statusData?.map(item => item.failure_status) || [])];
-        setStatuses(uniqueStatuses);
-      } catch (error) {
-        console.error('Error loading filter options:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadFilterOptions();
-  }, []);
+  const orgIds = getAllOrgIds();
+  const statuses = getAllStatuses();
 
   const updateFilter = (key: keyof FilterState, value: any) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -73,19 +42,6 @@ export const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
       : [...filters.failureStatuses, status];
     updateFilter('failureStatuses', newStatuses);
   };
-
-  if (loading) {
-    return (
-      <Card className="h-fit">
-        <CardHeader>
-          <CardTitle className="text-lg">Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-4">Loading filters...</div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="h-fit">
